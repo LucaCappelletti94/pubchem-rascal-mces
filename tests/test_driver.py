@@ -1,6 +1,7 @@
 """Tests for the local chunk driver and CLI forwarding."""
 
 from pathlib import Path
+from typing import Literal
 
 import pytest
 from click.testing import CliRunner
@@ -33,7 +34,12 @@ def test_run_local_driver_limits_requested_chunk_range(
         def __enter__(self) -> "FakePool":
             return self
 
-        def __exit__(self, exc_type, exc, tb) -> bool:
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: object | None,
+        ) -> Literal[False]:
             return False
 
         def imap_unordered(self, func, tasks):
@@ -70,7 +76,12 @@ def test_run_local_driver_skips_completed_chunks_in_requested_range(
         def __enter__(self) -> "FakePool":
             return self
 
-        def __exit__(self, exc_type, exc, tb) -> bool:
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: object | None,
+        ) -> Literal[False]:
             return False
 
         def imap_unordered(self, func, tasks):

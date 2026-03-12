@@ -70,6 +70,7 @@ CHUNK_SIZE=50000
 N_COMPOUNDS=$(( $(wc -l < "$SAMPLE_FILE") - 1 ))
 TOTAL_PAIRS=$(( N_COMPOUNDS * (N_COMPOUNDS - 1) / 2 ))
 TOTAL_CHUNKS=$(( (TOTAL_PAIRS + CHUNK_SIZE - 1) / CHUNK_SIZE ))
+MAX_ARRAY_SIZE=1000
 
 # ------------------------------------------------------------------
 # Debug mode overrides
@@ -120,6 +121,12 @@ REMAINING=$((ARRAY_MAX + 1))
 COST_EST="\$$(( REMAINING * 4 * 75 / 10000 ))"
 
 # ------------------------------------------------------------------
+# Split into batches of MAX_ARRAY_SIZE
+# ------------------------------------------------------------------
+TOTAL_TO_SUBMIT=$((ARRAY_MAX + 1))
+N_BATCHES=$(( (TOTAL_TO_SUBMIT + MAX_ARRAY_SIZE - 1) / MAX_ARRAY_SIZE ))
+
+# ------------------------------------------------------------------
 # Summary
 # ------------------------------------------------------------------
 echo ""
@@ -131,29 +138,41 @@ echo "Chunk size:     $CHUNK_SIZE"
 echo "Total chunks:   $TOTAL_CHUNKS"
 echo "Completed:      $COMPLETED"
 echo "Offset:         $OFFSET"
-echo "Array range:    0-${ARRAY_MAX}%${CONCURRENCY}"
+echo "Chunks to submit: $TOTAL_TO_SUBMIT (in $N_BATCHES batch(es) of up to $MAX_ARRAY_SIZE)"
 echo "Partition:      $PARTITION"
 echo "QoS:            $QOS"
 echo "Est. cost:      $COST_EST (worst-case at lr6 rates)"
 echo ""
 
 # ------------------------------------------------------------------
-# Submit
+# Submit in batches
 # ------------------------------------------------------------------
-SBATCH_CMD=(
-    sbatch
-    --partition="$PARTITION"
-    --qos="$QOS"
-    --time="$TIME"
-    --array="0-${ARRAY_MAX}%${CONCURRENCY}"
-    slurm/lrc/array_job.sh "$SAMPLE_NAME" "$OFFSET"
-)
+SUBMITTED=0
+BATCH_OFFSET=$OFFSET
 
-if [ "$DRY_RUN" = true ]; then
-    echo "[DRY RUN] Would execute:"
-    echo "  ${SBATCH_CMD[*]}"
-    exit 0
-fi
+while [ "$SUBMITTED" -lt "$TOTAL_TO_SUBMIT" ]; do
+    BATCH_SIZE=$((TOTAL_TO_SUBMIT - SUBMITTED))
+    if [ "$BATCH_SIZE" -gt "$MAX_ARRAY_SIZE" ]; then
+        BATCH_SIZE=$MAX_ARRAY_SIZE
+    fi
+    BATCH_ARRAY_MAX=$((BATCH_SIZE - 1))
 
-echo "Submitting..."
-"${SBATCH_CMD[@]}"
+    SBATCH_CMD=(
+        sbatch
+        --partition="$PARTITION"
+        --qos="$QOS"
+        --time="$TIME"
+        --array="0-${BATCH_ARRAY_MAX}%${CONCURRENCY}"
+        slurm/lrc/array_job.sh "$SAMPLE_NAME" "$BATCH_OFFSET"
+    )
+
+    if [ "$DRY_RUN" = true ]; then
+        echo "[DRY RUN] Batch $((SUBMITTED / MAX_ARRAY_SIZE + 1))/$N_BATCHES: ${SBATCH_CMD[*]}"
+    else
+        echo "Batch $((SUBMITTED / MAX_ARRAY_SIZE + 1))/$N_BATCHES (offset=$BATCH_OFFSET, chunks=$BATCH_SIZE)..."
+        "${SBATCH_CMD[@]}"
+    fi
+
+    SUBMITTED=$((SUBMITTED + BATCH_SIZE))
+    BATCH_OFFSET=$((BATCH_OFFSET + BATCH_SIZE))
+done

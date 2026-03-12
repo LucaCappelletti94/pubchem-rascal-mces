@@ -103,6 +103,20 @@ rascal-mces sample --name pubchem_100k --size 100000
 sbatch slurm/array_job.sh pubchem_100k
 ```
 
+#### Multi-cluster distribution
+
+For large jobs, split chunks across clusters using an offset:
+
+```bash
+# Cluster A: chunks 0–49,999
+sbatch --array=0-49999%200 slurm/array_job.sh pubchem_100k 0
+
+# Cluster B: chunks 50,000–99,999
+sbatch --array=0-49999%200 slurm/array_job.sh pubchem_100k 50000
+```
+
+The second argument is the chunk offset — `CHUNK_ID = SLURM_ARRAY_TASK_ID + OFFSET`. Copy the sample file (`data/samples/*.tsv`) to each cluster. After all clusters finish, collect the chunk parquet files into one directory and run `merge`.
+
 ## Development
 
 ```bash

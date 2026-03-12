@@ -90,6 +90,6 @@ fi
 
 echo ""
 echo "Setup complete. Next steps:"
-echo "  1. Transfer sample data:  bash slurm/lrc/transfer_data.sh <sample_name>  (from local)"
+echo "  1. Place sample data at:  data/samples/<sample_name>.tsv"
 echo "  2. Debug run:             bash slurm/lrc/submit.sh <sample_name> --debug"
 echo "  3. Production run:        bash slurm/lrc/submit.sh <sample_name>"

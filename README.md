@@ -85,7 +85,7 @@ ZENODO_TOKEN=... uv run rascal-mces publish data/results/merged/massspecgym \
 
 Each array task processes 50,000 pairs. Jobs skip automatically if their output file already exists, so the array is restart-safe.
 
-For LBNL Lawrencium, use the cluster-specific wrappers in `slurm/lrc/`: `setup_env.sh`, `transfer_data.sh`, `submit.sh`, `status.sh`, and `merge.sh`.
+For LBNL Lawrencium, use the cluster-specific wrappers in `slurm/lrc/`: `setup_env.sh`, `submit.sh`, `status.sh`, and `merge.sh`. Ensure the sample TSV is available under `data/samples/` before submitting jobs.
 
 ### PubChem (~116M compounds, future)
 

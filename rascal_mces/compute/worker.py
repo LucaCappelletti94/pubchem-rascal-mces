@@ -110,6 +110,7 @@ def run_worker(
     opts.similarityThreshold = 0.0  # type: ignore[assignment]
     opts.timeout = config.timeout_seconds  # type: ignore[assignment]
     opts.returnEmptyMCES = True  # type: ignore[assignment]
+    opts.maxBondMatchPairs = 5000  # type: ignore[assignment]
 
     cid_a_buf: list[int] = []
     cid_b_buf: list[int] = []

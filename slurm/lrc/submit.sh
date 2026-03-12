@@ -81,9 +81,11 @@ print(n, tp, nc, config.chunk_size)
 # ------------------------------------------------------------------
 # Debug mode overrides
 # ------------------------------------------------------------------
+TIME="04:00:00"
 if [ "$DEBUG" = true ]; then
     PARTITION="lr4"
     QOS="lr_debug"
+    TIME="03:00:00"
     N_CHUNKS=3
     CONCURRENCY=3
     echo "=== DEBUG MODE ==="
@@ -149,6 +151,7 @@ SBATCH_CMD=(
     sbatch
     --partition="$PARTITION"
     --qos="$QOS"
+    --time="$TIME"
     --array="0-${ARRAY_MAX}%${CONCURRENCY}"
     slurm/lrc/array_job.sh "$SAMPLE_NAME" "$OFFSET"
 )

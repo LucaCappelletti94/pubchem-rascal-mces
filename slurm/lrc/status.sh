@@ -20,20 +20,15 @@ RESULT_DIR="data/results/cluster/${SAMPLE_NAME}"
 LOGS_DIR="/global/scratch/users/$USER/rascal-mces-logs"
 
 # ------------------------------------------------------------------
-# Compute expected chunk count (once, outside the loop)
+# Compute expected chunk count (pure bash — no Python needed)
 # ------------------------------------------------------------------
+CHUNK_SIZE=50000
+
 if [ -f "$SAMPLE_FILE" ]; then
-    read -r N_COMPOUNDS TOTAL_PAIRS TOTAL_CHUNKS <<< "$(uv run python -c "
-import csv
-from rascal_mces.compute.worker import total_pairs, num_chunks
-from rascal_mces.config import Config
-config = Config()
-with open('$SAMPLE_FILE') as f:
-    n = sum(1 for _ in csv.DictReader(f, delimiter='\t'))
-tp = total_pairs(n)
-nc = num_chunks(n, config.chunk_size)
-print(n, tp, nc)
-")"
+    # wc -l minus 1 for header
+    N_COMPOUNDS=$(( $(wc -l < "$SAMPLE_FILE") - 1 ))
+    TOTAL_PAIRS=$(( N_COMPOUNDS * (N_COMPOUNDS - 1) / 2 ))
+    TOTAL_CHUNKS=$(( (TOTAL_PAIRS + CHUNK_SIZE - 1) / CHUNK_SIZE ))
 else
     echo "WARNING: Sample file not found: $SAMPLE_FILE"
     N_COMPOUNDS="?"
@@ -57,7 +52,7 @@ show_status() {
     echo "Completed:      $completed / $TOTAL_CHUNKS"
 
     if [ "$TOTAL_CHUNKS" != "?" ] && [ "$TOTAL_CHUNKS" -gt 0 ]; then
-        python3 -c "print(f'Progress:       {100 * $completed / $TOTAL_CHUNKS:.1f}%')"
+        echo "Progress:       $(( completed * 100 / TOTAL_CHUNKS ))%"
     fi
 
     # SLURM queue status

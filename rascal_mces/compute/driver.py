@@ -24,8 +24,18 @@ def _run_worker_task(args: tuple[str, int, str, str, int, int]) -> str | None:
 
 
 def run_local_driver(
-    config: Config, *, sample_name: str, n_cores: int | None = None
+    config: Config,
+    *,
+    sample_name: str,
+    n_cores: int | None = None,
+    offset: int = 0,
+    n_chunks: int | None = None,
 ) -> None:
+    if offset < 0:
+        raise ValueError("offset must be >= 0")
+    if n_chunks is not None and n_chunks <= 0:
+        raise ValueError("n_chunks must be > 0")
+
     if n_cores is None:
         n_cores = max(1, (os.cpu_count() or 1) - 1)
 
@@ -42,13 +52,30 @@ def run_local_driver(
         n_compounds = sum(1 for _ in reader)
 
     n_total_chunks = num_chunks(n_compounds, config.chunk_size)
-    print(f"Sample '{sample_name}': {n_compounds} compounds, {n_total_chunks} chunks")
+    if n_total_chunks == 0:
+        print(f"Sample '{sample_name}' has no chunkable pairs")
+        return
+
+    if offset >= n_total_chunks:
+        print(
+            f"Requested offset {offset} is beyond the last available chunk "
+            f"({n_total_chunks - 1})"
+        )
+        return
+
+    requested_end = n_total_chunks if n_chunks is None else offset + n_chunks
+    chunk_end = min(requested_end, n_total_chunks)
+    print(
+        f"Sample '{sample_name}': {n_compounds} compounds, {n_total_chunks} total chunks"
+    )
+    if offset > 0 or n_chunks is not None:
+        print(f"Processing chunks {offset}..{chunk_end - 1}")
     print(f"Using {n_cores} cores")
 
     # Filter to only unfinished chunks
     skipped = 0
     tasks = []
-    for chunk_id in range(n_total_chunks):
+    for chunk_id in range(offset, chunk_end):
         output_file = result_dir / f"chunk_{chunk_id:06d}.parquet"
         if output_file.exists():
             skipped += 1
@@ -68,7 +95,10 @@ def run_local_driver(
         print(f"Skipping {skipped} already-completed chunks")
 
     if not tasks:
-        print("All chunks already processed!")
+        if offset > 0 or n_chunks is not None:
+            print("All requested chunks already processed!")
+        else:
+            print("All chunks already processed!")
         return
 
     print(f"Processing {len(tasks)} remaining chunks ...")

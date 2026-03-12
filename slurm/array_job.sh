@@ -11,18 +11,24 @@
 # Usage:
 #   cd $HOME/rascal-mces
 #   mkdir -p logs
-#   sbatch slurm/array_job.sh [SAMPLE_NAME]
+#   sbatch slurm/array_job.sh [SAMPLE_NAME] [OFFSET]
 #
 # Example:
-#   sbatch slurm/array_job.sh massspecgym
+#   sbatch slurm/array_job.sh massspecgym          # chunks 0..N
+#   sbatch slurm/array_job.sh massspecgym 50000     # chunks 50000..50000+N
+#
+# Use OFFSET to distribute work across multiple clusters:
+#   Cluster A: sbatch --array=0-49999 slurm/array_job.sh pubchem_100k 0
+#   Cluster B: sbatch --array=0-49999 slurm/array_job.sh pubchem_100k 50000
 
 set -euo pipefail
 
 SAMPLE_NAME="${1:-massspecgym}"
+OFFSET="${2:-0}"
 
 cd "$HOME/rascal-mces"
 
-CHUNK_ID=$SLURM_ARRAY_TASK_ID
+CHUNK_ID=$((SLURM_ARRAY_TASK_ID + OFFSET))
 OUTPUT_FILE="data/results/cluster/${SAMPLE_NAME}/chunk_$(printf '%06d' $CHUNK_ID).parquet"
 
 # Skip if already done

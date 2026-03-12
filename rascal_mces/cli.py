@@ -90,12 +90,24 @@ def worker(ctx, compound_file, chunk_id, output_file):
 @click.option(
     "--cores", default=None, type=int, help="Number of cores (default: nproc-1)"
 )
+@click.option(
+    "--offset", default=0, type=int, help="Starting chunk ID (for multi-cluster splits)"
+)
+@click.option(
+    "--n-chunks", default=None, type=int, help="Number of chunks to process from offset"
+)
 @click.pass_context
-def run_local(ctx, sample_name, cores):
+def run_local(ctx, sample_name, cores, offset, n_chunks):
     """Run all chunks locally using multiprocessing."""
     from .compute.driver import run_local_driver
 
-    run_local_driver(ctx.obj["config"], sample_name=sample_name, n_cores=cores)
+    run_local_driver(
+        ctx.obj["config"],
+        sample_name=sample_name,
+        n_cores=cores,
+        offset=offset,
+        n_chunks=n_chunks,
+    )
 
 
 @main.command()

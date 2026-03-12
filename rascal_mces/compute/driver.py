@@ -37,7 +37,7 @@ def run_local_driver(
         raise ValueError("n_chunks must be > 0")
 
     if n_cores is None:
-        n_cores = max(1, (os.cpu_count() or 1) - 1)
+        n_cores = os.cpu_count() or 1
 
     sample_file = config.samples_dir / f"{sample_name}.tsv"
     result_dir = config.results_dir / "local" / sample_name

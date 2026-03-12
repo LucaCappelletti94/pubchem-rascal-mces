@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+from pathlib import Path
 
 import pytest
 from rdkit import RDLogger
@@ -86,6 +87,42 @@ def test_prepare_filters_by_size():
             lines = f.readlines()
 
         assert len(lines) == 3  # header + benzene + naphthalene
+
+
+def test_run_prepare_uses_all_detected_cores_by_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_prepare_external(
+        config: Config,
+        output: Path,
+        from_file: Path,
+        n_cores: int,
+        limit: int | None,
+    ) -> None:
+        captured["project_root"] = config.project_root
+        captured["output"] = output
+        captured["from_file"] = from_file
+        captured["n_cores"] = n_cores
+        captured["limit"] = limit
+
+    monkeypatch.setattr(prepare_module.os, "cpu_count", lambda: 5)
+    monkeypatch.setattr(
+        prepare_module, "_run_prepare_external", fake_run_prepare_external
+    )
+
+    config = Config(project_root=tmp_path)
+    from_file = tmp_path / "input.tsv"
+    run_prepare(config, from_file=str(from_file))
+
+    assert captured == {
+        "project_root": tmp_path.resolve(),
+        "output": config.processed_dir / "pubchem_clean.tsv",
+        "from_file": from_file,
+        "n_cores": 5,
+        "limit": None,
+    }
 
 
 def test_init_worker_sets_rdkit_logger_level(

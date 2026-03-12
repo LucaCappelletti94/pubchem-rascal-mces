@@ -180,7 +180,7 @@ def run_prepare(
     config.processed_dir.mkdir(parents=True, exist_ok=True)
 
     if n_cores is None:
-        n_cores = max(1, (os.cpu_count() or 1) - 1)
+        n_cores = os.cpu_count() or 1
 
     output = config.processed_dir / "pubchem_clean.tsv"
 

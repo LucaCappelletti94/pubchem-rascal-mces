@@ -125,6 +125,44 @@ def test_run_local_driver_reports_out_of_range_offset(
     )
 
 
+def test_run_local_driver_uses_all_detected_cores_by_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    sample_dir = tmp_path / "data" / "samples"
+    sample_dir.mkdir(parents=True)
+    _make_sample_file(sample_dir / "demo.tsv", n_compounds=4)
+
+    used_cores: list[int] = []
+
+    class FakePool:
+        def __init__(self, n_cores: int) -> None:
+            used_cores.append(n_cores)
+
+        def __enter__(self) -> "FakePool":
+            return self
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: object | None,
+        ) -> Literal[False]:
+            return False
+
+        def imap_unordered(self, func, tasks):
+            for _ in tasks:
+                yield None
+
+    monkeypatch.setattr(driver.os, "cpu_count", lambda: 6)
+    monkeypatch.setattr(driver.multiprocessing, "Pool", FakePool)
+
+    config = Config(project_root=tmp_path)
+    config.chunk_size = 10
+    driver.run_local_driver(config, sample_name="demo")
+
+    assert used_cores == [6]
+
+
 def test_run_local_cli_passes_chunk_range(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

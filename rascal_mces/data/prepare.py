@@ -19,6 +19,10 @@ _normalizer: MolNormalizer | None = None
 def _init_worker() -> None:
     """Initialize per-process normalizer (avoid pickling RDKit objects)."""
     global _normalizer
+    from rdkit import RDLogger
+
+    RDLogger.logger().setLevel(RDLogger.ERROR)
+
     from ..normalize import MolNormalizer
 
     _normalizer = MolNormalizer()

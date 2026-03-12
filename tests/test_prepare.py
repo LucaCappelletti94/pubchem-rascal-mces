@@ -3,6 +3,11 @@
 import os
 import tempfile
 
+import pytest
+from rdkit import RDLogger
+
+import rascal_mces.data.prepare as prepare_module
+import rascal_mces.normalize as normalize_module
 from rascal_mces.config import Config
 from rascal_mces.data.prepare import run_prepare
 
@@ -81,3 +86,25 @@ def test_prepare_filters_by_size():
             lines = f.readlines()
 
         assert len(lines) == 3  # header + benzene + naphthalene
+
+
+def test_init_worker_sets_rdkit_logger_level(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    levels: list[int] = []
+
+    class FakeLogger:
+        def setLevel(self, level: int) -> None:
+            levels.append(level)
+
+    class FakeNormalizer:
+        pass
+
+    monkeypatch.setattr(RDLogger, "logger", lambda: FakeLogger())
+    monkeypatch.setattr(normalize_module, "MolNormalizer", FakeNormalizer)
+    monkeypatch.setattr(prepare_module, "_normalizer", None)
+
+    prepare_module._init_worker()
+
+    assert levels == [RDLogger.ERROR]
+    assert isinstance(prepare_module._normalizer, FakeNormalizer)

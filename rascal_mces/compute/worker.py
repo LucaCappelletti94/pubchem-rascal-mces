@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from rdkit import RDLogger
 from rdkit.Chem import MolFromSmiles
 from rdkit.Chem.rdRascalMCES import FindMCES, RascalOptions
 
@@ -21,6 +22,10 @@ SCHEMA = pa.schema(
 )
 
 BATCH_SIZE = 1000
+
+
+def _init_worker() -> None:
+    RDLogger.logger().setLevel(RDLogger.ERROR)
 
 
 def total_pairs(n: int) -> int:
@@ -82,6 +87,8 @@ def pairs_for_chunk(
 def run_worker(
     config: Config, compound_file: str, chunk_id: int, output_file: str
 ) -> None:
+    _init_worker()
+
     output_path = Path(output_file)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -119,6 +126,7 @@ def run_worker(
     time_buf: list[float] = []
 
     processed = 0
+    logged_halfway = False
     t_start = time.monotonic()
 
     writer = None
@@ -155,17 +163,22 @@ def run_worker(
 
         processed += 1
 
+        if (
+            not logged_halfway
+            and processed < len(pairs)
+            and processed * 2 >= len(pairs)
+        ):
+            elapsed = time.monotonic() - t_start
+            rate = processed / elapsed if elapsed > 0 else 0.0
+            print(f"  chunk {chunk_id}: 50% ({rate:.0f} pairs/sec)")
+            logged_halfway = True
+
         if len(cid_a_buf) >= BATCH_SIZE:
             batch = _make_batch(cid_a_buf, cid_b_buf, sim_buf, timeout_buf, time_buf)
             if writer is None:
                 writer = pq.ParquetWriter(str(output_path), SCHEMA, compression="zstd")
             writer.write_table(batch)
             cid_a_buf, cid_b_buf, sim_buf, timeout_buf, time_buf = [], [], [], [], []
-
-            if processed % 5000 == 0:
-                elapsed = time.monotonic() - t_start
-                rate = processed / elapsed
-                print(f"  [{processed}/{len(pairs)}] {rate:.1f} pairs/sec")
 
     # Flush remaining
     if cid_a_buf:

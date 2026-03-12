@@ -2,9 +2,12 @@
 
 import os
 import tempfile
+from types import SimpleNamespace
 
 import pyarrow.parquet as pq
+from rdkit import RDLogger
 
+import rascal_mces.compute.worker as worker_module
 from rascal_mces.compute.worker import (
     num_chunks,
     pairs_for_chunk,
@@ -74,6 +77,52 @@ def test_worker_no_timeouts_on_small_molecules():
         table = pq.read_table(output_file)
         timeouts = table.column("timed_out").to_pylist()
         assert all(t == 0 for t in timeouts)
+
+
+def test_init_worker_sets_rdkit_logger_level(monkeypatch):
+    levels: list[int] = []
+
+    class FakeLogger:
+        def setLevel(self, level: int) -> None:
+            levels.append(level)
+
+    monkeypatch.setattr(RDLogger, "logger", lambda: FakeLogger())
+
+    worker_module._init_worker()
+
+    assert levels == [RDLogger.ERROR]
+
+
+def test_worker_logs_halfway_progress_once(monkeypatch, capsys):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        compound_file = os.path.join(tmpdir, "compounds.tsv")
+        output_file = os.path.join(tmpdir, "output.parquet")
+
+        _make_compound_file(compound_file)
+
+        pairs = [(1, 2)] * (worker_module.BATCH_SIZE + 501)
+
+        monkeypatch.setattr(
+            worker_module,
+            "pairs_for_chunk",
+            lambda cids, chunk_id, chunk_size: pairs,
+        )
+        monkeypatch.setattr(
+            worker_module,
+            "FindMCES",
+            lambda mol_a, mol_b, opts: [
+                SimpleNamespace(similarity=0.75, timedOut=False)
+            ],
+        )
+
+        config = Config()
+        config.chunk_size = len(pairs)
+        run_worker(config, compound_file, 7, output_file)
+
+        output = capsys.readouterr().out
+
+        assert output.count("chunk 7: 50%") == 1
+        assert f"Worker done: {len(pairs)} pairs" in output
 
 
 def test_total_pairs():

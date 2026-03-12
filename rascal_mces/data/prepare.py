@@ -20,6 +20,7 @@ def _init_worker() -> None:
     """Initialize per-process normalizer (avoid pickling RDKit objects)."""
     global _normalizer
     from ..normalize import MolNormalizer
+
     _normalizer = MolNormalizer()
 
 
@@ -80,7 +81,9 @@ def _process_external_item(item: tuple[int, str]) -> tuple[int, str, str, int] |
 def _read_pubchem(config: Config, limit: int | None) -> list[str]:
     smiles_gz = config.raw_dir / "CID-SMILES.gz"
     if not smiles_gz.exists():
-        raise FileNotFoundError(f"Run 'rascal-mces download' first. Missing: {smiles_gz}")
+        raise FileNotFoundError(
+            f"Run 'rascal-mces download' first. Missing: {smiles_gz}"
+        )
     print(f"Reading {smiles_gz} ...")
     lines = []
     with gzip.open(smiles_gz, "rt", encoding="utf-8") as f:
@@ -104,11 +107,17 @@ def _read_external_file(path: Path) -> list[tuple[int, str]]:
         lower = first_line.lower()
         if "smiles" in lower:
             # Has header — find the SMILES column
-            headers = first_line.split("\t") if "\t" in first_line else first_line.split(",")
+            headers = (
+                first_line.split("\t") if "\t" in first_line else first_line.split(",")
+            )
             headers_lower = [h.lower().strip() for h in headers]
             smiles_col = next(i for i, h in enumerate(headers_lower) if "smiles" in h)
             for idx, line in enumerate(f):
-                parts = line.strip().split("\t") if "\t" in line else line.strip().split(",")
+                parts = (
+                    line.strip().split("\t")
+                    if "\t" in line
+                    else line.strip().split(",")
+                )
                 if smiles_col < len(parts):
                     items.append((idx, parts[smiles_col].strip()))
         else:
@@ -134,7 +143,9 @@ KNOWN_SOURCES = {
 def _fetch_source(source: str, limit: int | None = None) -> list[tuple[int, str]]:
     """Fetch unique SMILES from a known HuggingFace dataset."""
     if source not in KNOWN_SOURCES:
-        raise ValueError(f"Unknown source '{source}'. Known sources: {list(KNOWN_SOURCES.keys())}")
+        raise ValueError(
+            f"Unknown source '{source}'. Known sources: {list(KNOWN_SOURCES.keys())}"
+        )
 
     hf_id = KNOWN_SOURCES[source]
     print(f"Fetching '{source}' from HuggingFace ({hf_id}) ...")
@@ -178,7 +189,9 @@ def run_prepare(
         _run_prepare_pubchem(config, output, n_cores, limit)
 
 
-def _run_prepare_pubchem(config: Config, output: Path, n_cores: int, limit: int | None) -> None:
+def _run_prepare_pubchem(
+    config: Config, output: Path, n_cores: int, limit: int | None
+) -> None:
     lines = _read_pubchem(config, limit)
     total = len(lines)
     print(f"Loaded {total:,} lines. Normalizing with {n_cores} cores ...")
@@ -191,7 +204,10 @@ def _run_prepare_pubchem(config: Config, output: Path, n_cores: int, limit: int 
     with multiprocessing.Pool(n_cores, initializer=_init_worker) as pool:
         for result in tqdm(
             pool.imap(_process_pubchem_line, lines, chunksize=1024),
-            total=total, desc="Normalizing", unit=" compounds", mininterval=2.0,
+            total=total,
+            desc="Normalizing",
+            unit=" compounds",
+            mininterval=2.0,
         ):
             if result is None:
                 norm_fail += 1
@@ -210,7 +226,9 @@ def _run_prepare_pubchem(config: Config, output: Path, n_cores: int, limit: int 
     _write_output(output, unique_keys, total, norm_fail, filtered_size, duplicates)
 
 
-def _run_prepare_external(config: Config, output: Path, from_file: Path, n_cores: int, limit: int | None) -> None:
+def _run_prepare_external(
+    config: Config, output: Path, from_file: Path, n_cores: int, limit: int | None
+) -> None:
     print(f"Reading external file {from_file} ...")
     items = _read_external_file(from_file)
     if limit is not None:
@@ -218,7 +236,9 @@ def _run_prepare_external(config: Config, output: Path, from_file: Path, n_cores
     _run_prepare_items(config, output, items, n_cores)
 
 
-def _run_prepare_items(config: Config, output: Path, items: list[tuple[int, str]], n_cores: int) -> None:
+def _run_prepare_items(
+    config: Config, output: Path, items: list[tuple[int, str]], n_cores: int
+) -> None:
     total = len(items)
     print(f"Loaded {total:,} molecules. Normalizing with {n_cores} cores ...")
 
@@ -230,7 +250,10 @@ def _run_prepare_items(config: Config, output: Path, items: list[tuple[int, str]
     with multiprocessing.Pool(n_cores, initializer=_init_worker) as pool:
         for result in tqdm(
             pool.imap(_process_external_item, items, chunksize=256),
-            total=total, desc="Normalizing", unit=" compounds", mininterval=2.0,
+            total=total,
+            desc="Normalizing",
+            unit=" compounds",
+            mininterval=2.0,
         ):
             if result is None:
                 norm_fail += 1
@@ -246,7 +269,9 @@ def _run_prepare_items(config: Config, output: Path, items: list[tuple[int, str]
 
     # Re-number IDs sequentially (external files may not have meaningful IDs)
     renumbered: dict[str, tuple[int, str, str, int]] = {}
-    for new_id, (inchi_key, (_, _, smiles, hac)) in enumerate(sorted(unique_keys.items()), 1):
+    for new_id, (inchi_key, (_, _, smiles, hac)) in enumerate(
+        sorted(unique_keys.items()), 1
+    ):
         renumbered[inchi_key] = (new_id, inchi_key, smiles, hac)
 
     _write_output(output, renumbered, total, norm_fail, filtered_size, duplicates)
@@ -271,8 +296,12 @@ def _write_output(
     clean_count = len(unique_keys)
     print("\n=== Preparation Report ===")
     print(f"Total compounds processed:  {total:,}")
-    print(f"Normalization failures:     {norm_fail:,} ({norm_fail/total*100:.2f}%)")
-    print(f"Filtered by size:           {filtered_size:,} ({filtered_size/total*100:.2f}%)")
-    print(f"Duplicates removed:         {duplicates:,} ({duplicates/total*100:.2f}%)")
+    print(f"Normalization failures:     {norm_fail:,} ({norm_fail / total * 100:.2f}%)")
+    print(
+        f"Filtered by size:           {filtered_size:,} ({filtered_size / total * 100:.2f}%)"
+    )
+    print(
+        f"Duplicates removed:         {duplicates:,} ({duplicates / total * 100:.2f}%)"
+    )
     print(f"Final clean compounds:      {clean_count:,}")
     print(f"Output: {output}")

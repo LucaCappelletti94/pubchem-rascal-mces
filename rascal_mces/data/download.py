@@ -42,7 +42,11 @@ def _download_with_progress(url: str, dest: Path) -> None:
                 downloaded += len(chunk)
                 if total > 0:
                     pct = downloaded / total * 100
-                    print(f"\r  {downloaded / (1024**2):.1f} / {total / (1024**2):.1f} MB ({pct:.1f}%)", end="", flush=True)
+                    print(
+                        f"\r  {downloaded / (1024**2):.1f} / {total / (1024**2):.1f} MB ({pct:.1f}%)",
+                        end="",
+                        flush=True,
+                    )
                 else:
                     print(f"\r  {downloaded / (1024**2):.1f} MB", end="", flush=True)
         print()

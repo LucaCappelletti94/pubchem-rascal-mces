@@ -7,12 +7,16 @@ from ..config import Config
 from ..compute.worker import num_chunks, total_pairs
 
 
-def run_sample(config: Config, *, name: str, size: int | None = None, use_all: bool = False) -> None:
+def run_sample(
+    config: Config, *, name: str, size: int | None = None, use_all: bool = False
+) -> None:
     config.samples_dir.mkdir(parents=True, exist_ok=True)
 
     clean_file = config.processed_dir / "pubchem_clean.tsv"
     if not clean_file.exists():
-        raise FileNotFoundError(f"Run 'rascal-mces prepare' first. Missing: {clean_file}")
+        raise FileNotFoundError(
+            f"Run 'rascal-mces prepare' first. Missing: {clean_file}"
+        )
 
     # Read all compounds
     compounds = []
@@ -31,7 +35,9 @@ def run_sample(config: Config, *, name: str, size: int | None = None, use_all: b
         raise click.UsageError("Either --size or --all must be specified")
 
     if size > len(compounds):
-        raise ValueError(f"Requested {size} but only {len(compounds)} compounds available")
+        raise ValueError(
+            f"Requested {size} but only {len(compounds)} compounds available"
+        )
 
     # Stratified sampling by heavy atom count
     rng = random.Random(config.random_seed)
@@ -97,7 +103,9 @@ def _write_sample(config: Config, name: str, sampled: list[dict]) -> None:
     with open(sample_file, "w") as f:
         f.write("CID\tInChIKey\tSMILES\tHeavyAtomCount\n")
         for comp in sampled:
-            f.write(f"{comp['CID']}\t{comp['InChIKey']}\t{comp['SMILES']}\t{comp['HeavyAtomCount']}\n")
+            f.write(
+                f"{comp['CID']}\t{comp['InChIKey']}\t{comp['SMILES']}\t{comp['HeavyAtomCount']}\n"
+            )
 
     n = len(sampled)
     n_pairs = total_pairs(n)

@@ -50,6 +50,17 @@ def test_normalizer_inchi_invalid():
     assert normalizer.normalize_inchi("") is None
 
 
+def test_normalizer_suppresses_rdkit_rejection_logs(capfd):
+    """Rejected molecules should not leak RDKit parser errors to stderr."""
+    normalizer = MolNormalizer()
+
+    assert normalizer.normalize_smiles("not_a_smiles") is None
+    assert normalizer.normalize_smiles("c1nccc2ccccn12") is None
+
+    captured = capfd.readouterr()
+    assert captured.err == ""
+
+
 def test_normalizer_single_atom():
     """Single heavy atom molecule should normalize fine."""
     normalizer = MolNormalizer()

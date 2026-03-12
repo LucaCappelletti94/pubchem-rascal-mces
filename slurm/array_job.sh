@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=rascal-mces
-#SBATCH --array=0-99770%200
+#SBATCH --array=0-9976%200
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=4G

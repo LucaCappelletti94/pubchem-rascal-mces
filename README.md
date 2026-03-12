@@ -83,7 +83,7 @@ ZENODO_TOKEN=... rascal-mces publish data/results/merged/massspecgym \
     --description "Pairwise MCES similarity for 31,587 MassSpecGym molecules"
 ```
 
-Each array task processes 5,000 pairs. Jobs skip automatically if their output file already exists, so the array is restart-safe.
+Each array task processes 50,000 pairs. Jobs skip automatically if their output file already exists, so the array is restart-safe.
 
 ### PubChem (~116M compounds, future)
 

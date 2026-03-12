@@ -40,7 +40,7 @@ class Config:
     stratification_bin_width: int = 5
 
     # Pair chunking
-    chunk_size: int = 5_000
+    chunk_size: int = 50_000
 
     # RASCAL MCES
     timeout_seconds: int = 120

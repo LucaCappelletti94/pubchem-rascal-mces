@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rascal-mces"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "tqdm",
+    "click",
+    "rdkit>=2025.9.6",
+    "huggingface-hub>=1.6.0",
+    "datasets>=4.7.0",
+    "pyarrow>=23.0.1",
+]
+
+[project.scripts]
+rascal-mces = "rascal_mces.cli:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "pytest>=9.0.2",
+    "ruff>=0.15.5",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+ignore_missing_imports = true

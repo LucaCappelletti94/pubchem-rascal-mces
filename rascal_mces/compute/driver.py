@@ -1,0 +1,86 @@
+import csv
+import multiprocessing
+import os
+from pathlib import Path
+
+from ..config import Config
+from .worker import num_chunks
+
+
+def _run_worker_task(args: tuple[str, int, str, str, int, int]) -> str | None:
+    """Run worker in a subprocess-isolated function. Returns error message or None."""
+    compound_file, chunk_id, output_file, project_root, timeout, chunk_size = args
+    try:
+        from ..config import Config
+        from .worker import run_worker
+
+        config = Config(project_root=Path(project_root))
+        config.timeout_seconds = timeout
+        config.chunk_size = chunk_size
+        run_worker(config, compound_file, chunk_id, output_file)
+        return None
+    except Exception as e:
+        return f"FAILED: chunk {chunk_id}: {e}"
+
+
+def run_local_driver(
+    config: Config, *, sample_name: str, n_cores: int | None = None
+) -> None:
+    if n_cores is None:
+        n_cores = max(1, (os.cpu_count() or 1) - 1)
+
+    sample_file = config.samples_dir / f"{sample_name}.tsv"
+    result_dir = config.results_dir / "local" / sample_name
+    result_dir.mkdir(parents=True, exist_ok=True)
+
+    if not sample_file.exists():
+        raise FileNotFoundError(f"Sample file not found: {sample_file}")
+
+    # Count compounds to determine number of chunks
+    with open(sample_file) as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        n_compounds = sum(1 for _ in reader)
+
+    n_total_chunks = num_chunks(n_compounds, config.chunk_size)
+    print(f"Sample '{sample_name}': {n_compounds} compounds, {n_total_chunks} chunks")
+    print(f"Using {n_cores} cores")
+
+    # Filter to only unfinished chunks
+    skipped = 0
+    tasks = []
+    for chunk_id in range(n_total_chunks):
+        output_file = result_dir / f"chunk_{chunk_id:06d}.parquet"
+        if output_file.exists():
+            skipped += 1
+            continue
+        tasks.append(
+            (
+                str(sample_file),
+                chunk_id,
+                str(output_file),
+                str(config.project_root),
+                config.timeout_seconds,
+                config.chunk_size,
+            )
+        )
+
+    if skipped:
+        print(f"Skipping {skipped} already-completed chunks")
+
+    if not tasks:
+        print("All chunks already processed!")
+        return
+
+    print(f"Processing {len(tasks)} remaining chunks ...")
+
+    with multiprocessing.Pool(n_cores) as pool:
+        failures = 0
+        for result in pool.imap_unordered(_run_worker_task, tasks):
+            if result is not None:
+                print(result)
+                failures += 1
+
+    completed = len(tasks) - failures
+    print(
+        f"\nDone: {completed} chunks completed, {failures} failed. Results in {result_dir}"
+    )

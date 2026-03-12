@@ -62,13 +62,13 @@ Complete pairwise MCES similarity for all molecules in [MassSpecGym](https://git
 
 ```bash
 # 1. Prepare: fetch from HuggingFace, normalize, deduplicate, filter
-rascal-mces prepare --source massspecgym
+uv run rascal-mces prepare --source massspecgym
 
 # 2. Sample: use all compounds
-rascal-mces sample --name massspecgym --all
+uv run rascal-mces sample --name massspecgym --all
 
 # 3. Compute (locally for testing, or on SLURM for production)
-rascal-mces run-local --sample-name massspecgym --cores 8
+uv run rascal-mces run-local --sample-name massspecgym --cores 8
 
 # 3. (alt) Compute on SLURM
 bash slurm/setup_env.sh           # once, on login node
@@ -76,14 +76,16 @@ mkdir -p logs
 sbatch slurm/array_job.sh massspecgym
 
 # 4. Merge and publish
-rascal-mces merge data/results/cluster/massspecgym data/results/merged/massspecgym \
+uv run rascal-mces merge data/results/cluster/massspecgym data/results/merged/massspecgym \
     --compound-file data/samples/massspecgym.tsv
-ZENODO_TOKEN=... rascal-mces publish data/results/merged/massspecgym \
+ZENODO_TOKEN=... uv run rascal-mces publish data/results/merged/massspecgym \
     --title "RASCAL MCES similarity for MassSpecGym compounds" \
     --description "Pairwise MCES similarity for 31,587 MassSpecGym molecules"
 ```
 
 Each array task processes 50,000 pairs. Jobs skip automatically if their output file already exists, so the array is restart-safe.
+
+For LBNL Lawrencium, use the cluster-specific wrappers in `slurm/lrc/`: `setup_env.sh`, `transfer_data.sh`, `submit.sh`, `status.sh`, and `merge.sh`.
 
 ### PubChem (~116M compounds, future)
 
@@ -91,13 +93,13 @@ Pairwise similarity across PubChem at scale. Uses stratified subsampling by heav
 
 ```bash
 # Download PubChem CID-SMILES (~1.4 GB compressed)
-rascal-mces download
+uv run rascal-mces download
 
 # Normalize all compounds
-rascal-mces prepare --cores 32
+uv run rascal-mces prepare --cores 32
 
 # Draw a stratified sample (e.g. 100k compounds)
-rascal-mces sample --name pubchem_100k --size 100000
+uv run rascal-mces sample --name pubchem_100k --size 100000
 
 # Submit to SLURM (adjust --array range to match reported chunk count)
 sbatch slurm/array_job.sh pubchem_100k

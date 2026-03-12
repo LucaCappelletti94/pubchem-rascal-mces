@@ -1,17 +1,18 @@
 #!/bin/bash
 # Smart submission wrapper for LRC array jobs.
-# Reads the sample TSV, computes chunk count, skips completed chunks.
+# Each array task uses a full node to process CHUNKS_PER_NODE chunks in parallel.
 #
 # Usage:
 #   bash slurm/lrc/submit.sh <SAMPLE_NAME> [OPTIONS]
 #
 # Options:
-#   --partition=PART   Override partition (default: lr6)
-#   --offset=N         Starting chunk ID offset (default: 0)
-#   --n-chunks=N       Limit number of chunks to submit
-#   --concurrency=N    Max concurrent array tasks (default: 500)
-#   --debug            Submit 3 chunks on lr4 (free) with lr_debug QoS
-#   --dry-run          Show what would be submitted without actually submitting
+#   --partition=PART       Override partition (default: lr6)
+#   --offset=N             Starting chunk ID offset (default: 0)
+#   --n-chunks=N           Limit number of chunks to submit
+#   --chunks-per-node=N    Chunks processed per node (default: 40)
+#   --concurrency=N        Max concurrent array tasks (default: 500)
+#   --debug                Submit 1 node (32 chunks) on lr4 with lr_debug QoS
+#   --dry-run              Show what would be submitted without actually submitting
 
 set -euo pipefail
 
@@ -27,20 +28,22 @@ PARTITION="lr6"
 QOS="lr_normal"
 OFFSET=0
 N_CHUNKS=""
+CHUNKS_PER_NODE=40
 CONCURRENCY=500
 DEBUG=false
 DRY_RUN=false
 
 for arg in "$@"; do
     case "$arg" in
-        --partition=*) PARTITION="${arg#*=}" ;;
-        --offset=*)    OFFSET="${arg#*=}" ;;
-        --n-chunks=*)  N_CHUNKS="${arg#*=}" ;;
-        --concurrency=*) CONCURRENCY="${arg#*=}" ;;
-        --debug)       DEBUG=true ;;
-        --dry-run)     DRY_RUN=true ;;
-        -*)            echo "Unknown option: $arg"; exit 1 ;;
-        *)             SAMPLE_NAME="$arg" ;;
+        --partition=*)       PARTITION="${arg#*=}" ;;
+        --offset=*)          OFFSET="${arg#*=}" ;;
+        --n-chunks=*)        N_CHUNKS="${arg#*=}" ;;
+        --chunks-per-node=*) CHUNKS_PER_NODE="${arg#*=}" ;;
+        --concurrency=*)     CONCURRENCY="${arg#*=}" ;;
+        --debug)             DEBUG=true ;;
+        --dry-run)           DRY_RUN=true ;;
+        -*)                  echo "Unknown option: $arg"; exit 1 ;;
+        *)                   SAMPLE_NAME="$arg" ;;
     esac
 done
 
@@ -48,12 +51,13 @@ if [ -z "$SAMPLE_NAME" ]; then
     echo "Usage: bash slurm/lrc/submit.sh <SAMPLE_NAME> [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  --partition=PART   Partition (default: lr6)"
-    echo "  --offset=N         Starting chunk ID offset (default: 0)"
-    echo "  --n-chunks=N       Limit number of chunks"
-    echo "  --concurrency=N    Max concurrent tasks (default: 500)"
-    echo "  --debug            3 chunks on lr4 (free) with lr_debug QoS"
-    echo "  --dry-run          Show submission without executing"
+    echo "  --partition=PART       Partition (default: lr6)"
+    echo "  --offset=N             Starting chunk ID offset (default: 0)"
+    echo "  --n-chunks=N           Limit number of chunks"
+    echo "  --chunks-per-node=N    Chunks per node (default: 40)"
+    echo "  --concurrency=N        Max concurrent tasks (default: 500)"
+    echo "  --debug                1 node on lr4 with lr_debug QoS"
+    echo "  --dry-run              Show submission without executing"
     exit 1
 fi
 
@@ -64,7 +68,7 @@ if [ ! -f "$SAMPLE_FILE" ]; then
 fi
 
 # ------------------------------------------------------------------
-# Compute chunk count (pure bash — no Python needed)
+# Compute chunk count (pure bash)
 # ------------------------------------------------------------------
 CHUNK_SIZE=50000
 N_COMPOUNDS=$(( $(wc -l < "$SAMPLE_FILE") - 1 ))
@@ -80,30 +84,28 @@ if [ "$DEBUG" = true ]; then
     PARTITION="lr4"
     QOS="lr_debug"
     TIME="03:00:00"
-    N_CHUNKS=3
-    CONCURRENCY=3
-    echo "=== DEBUG MODE ==="
+    CHUNKS_PER_NODE=24  # lr4 has 24 cores
+    N_CHUNKS=$CHUNKS_PER_NODE  # just 1 node
+    CONCURRENCY=1
+    echo "=== DEBUG MODE (1 node, $CHUNKS_PER_NODE chunks) ==="
 fi
 
 # ------------------------------------------------------------------
-# Determine array range
+# Determine how many chunks to process and how many array tasks
 # ------------------------------------------------------------------
-if [ -n "$N_CHUNKS" ]; then
-    ARRAY_MAX=$((N_CHUNKS - 1))
-else
-    ARRAY_MAX=$((TOTAL_CHUNKS - 1 - OFFSET))
+CHUNKS_TO_PROCESS=$((TOTAL_CHUNKS - OFFSET))
+if [ -n "$N_CHUNKS" ] && [ "$N_CHUNKS" -lt "$CHUNKS_TO_PROCESS" ]; then
+    CHUNKS_TO_PROCESS=$N_CHUNKS
 fi
 
-# Cap to total chunks available
-MAX_POSSIBLE=$((TOTAL_CHUNKS - 1 - OFFSET))
-if [ "$ARRAY_MAX" -gt "$MAX_POSSIBLE" ]; then
-    ARRAY_MAX=$MAX_POSSIBLE
-fi
-
-if [ "$ARRAY_MAX" -lt 0 ]; then
+if [ "$CHUNKS_TO_PROCESS" -le 0 ]; then
     echo "No chunks to process (offset $OFFSET >= total $TOTAL_CHUNKS)."
     exit 0
 fi
+
+# Number of array tasks = ceil(chunks / chunks_per_node)
+N_ARRAY_TASKS=$(( (CHUNKS_TO_PROCESS + CHUNKS_PER_NODE - 1) / CHUNKS_PER_NODE ))
+ARRAY_MAX=$((N_ARRAY_TASKS - 1))
 
 # ------------------------------------------------------------------
 # Count completed chunks
@@ -115,43 +117,39 @@ if [ -d "$RESULT_DIR" ]; then
 fi
 
 # ------------------------------------------------------------------
-# Cost estimate (lr6: $0.0075/core-hr, 4hr wall time per task)
+# Cost estimate (lr6: $0.0075/core-hr * 40 cores * 4hr per node)
 # ------------------------------------------------------------------
-REMAINING=$((ARRAY_MAX + 1))
-COST_EST="\$$(( REMAINING * 4 * 75 / 10000 ))"
-
-# ------------------------------------------------------------------
-# Split into batches of MAX_ARRAY_SIZE
-# ------------------------------------------------------------------
-TOTAL_TO_SUBMIT=$((ARRAY_MAX + 1))
-N_BATCHES=$(( (TOTAL_TO_SUBMIT + MAX_ARRAY_SIZE - 1) / MAX_ARRAY_SIZE ))
+COST_PER_NODE=$(( 40 * 4 * 75 / 10000 ))  # ~$1.20/node
+COST_EST="\$$(( N_ARRAY_TASKS * COST_PER_NODE ))"
 
 # ------------------------------------------------------------------
 # Summary
 # ------------------------------------------------------------------
 echo ""
 echo "=== Submission Summary ==="
-echo "Sample:         $SAMPLE_NAME"
-echo "Compounds:      $N_COMPOUNDS"
-echo "Total pairs:    $TOTAL_PAIRS"
-echo "Chunk size:     $CHUNK_SIZE"
-echo "Total chunks:   $TOTAL_CHUNKS"
-echo "Completed:      $COMPLETED"
-echo "Offset:         $OFFSET"
-echo "Chunks to submit: $TOTAL_TO_SUBMIT (in $N_BATCHES batch(es) of up to $MAX_ARRAY_SIZE)"
-echo "Partition:      $PARTITION"
-echo "QoS:            $QOS"
-echo "Est. cost:      $COST_EST (worst-case at lr6 rates)"
+echo "Sample:            $SAMPLE_NAME"
+echo "Compounds:         $N_COMPOUNDS"
+echo "Total pairs:       $TOTAL_PAIRS"
+echo "Chunk size:        $CHUNK_SIZE"
+echo "Total chunks:      $TOTAL_CHUNKS"
+echo "Completed:         $COMPLETED"
+echo "Chunks to process: $CHUNKS_TO_PROCESS"
+echo "Chunks per node:   $CHUNKS_PER_NODE"
+echo "Array tasks:       $N_ARRAY_TASKS (nodes)"
+echo "Partition:         $PARTITION"
+echo "QoS:               $QOS"
+echo "Est. cost:         $COST_EST (worst-case at lr6 rates)"
 echo ""
 
 # ------------------------------------------------------------------
-# Submit in batches
+# Submit in batches of MAX_ARRAY_SIZE
 # ------------------------------------------------------------------
+N_BATCHES=$(( (N_ARRAY_TASKS + MAX_ARRAY_SIZE - 1) / MAX_ARRAY_SIZE ))
 SUBMITTED=0
-BATCH_OFFSET=$OFFSET
+BATCH_CHUNK_OFFSET=$OFFSET
 
-while [ "$SUBMITTED" -lt "$TOTAL_TO_SUBMIT" ]; do
-    BATCH_SIZE=$((TOTAL_TO_SUBMIT - SUBMITTED))
+while [ "$SUBMITTED" -lt "$N_ARRAY_TASKS" ]; do
+    BATCH_SIZE=$((N_ARRAY_TASKS - SUBMITTED))
     if [ "$BATCH_SIZE" -gt "$MAX_ARRAY_SIZE" ]; then
         BATCH_SIZE=$MAX_ARRAY_SIZE
     fi
@@ -163,16 +161,16 @@ while [ "$SUBMITTED" -lt "$TOTAL_TO_SUBMIT" ]; do
         --qos="$QOS"
         --time="$TIME"
         --array="0-${BATCH_ARRAY_MAX}%${CONCURRENCY}"
-        slurm/lrc/array_job.sh "$SAMPLE_NAME" "$BATCH_OFFSET"
+        slurm/lrc/array_job.sh "$SAMPLE_NAME" "$BATCH_CHUNK_OFFSET" "$CHUNKS_PER_NODE"
     )
 
     if [ "$DRY_RUN" = true ]; then
         echo "[DRY RUN] Batch $((SUBMITTED / MAX_ARRAY_SIZE + 1))/$N_BATCHES: ${SBATCH_CMD[*]}"
     else
-        echo "Batch $((SUBMITTED / MAX_ARRAY_SIZE + 1))/$N_BATCHES (offset=$BATCH_OFFSET, chunks=$BATCH_SIZE)..."
+        echo "Batch $((SUBMITTED / MAX_ARRAY_SIZE + 1))/$N_BATCHES (tasks=$BATCH_SIZE, chunk_offset=$BATCH_CHUNK_OFFSET)..."
         "${SBATCH_CMD[@]}"
     fi
 
     SUBMITTED=$((SUBMITTED + BATCH_SIZE))
-    BATCH_OFFSET=$((BATCH_OFFSET + BATCH_SIZE))
+    BATCH_CHUNK_OFFSET=$((BATCH_CHUNK_OFFSET + BATCH_SIZE * CHUNKS_PER_NODE))
 done

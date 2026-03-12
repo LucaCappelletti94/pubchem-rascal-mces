@@ -4,8 +4,8 @@
 #SBATCH --partition=lr6
 #SBATCH --qos=lr_normal
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
+#SBATCH --exclusive
+#SBATCH --mem=0
 #SBATCH --time=04:00:00
 #SBATCH --output=/global/scratch/users/%u/rascal-mces-logs/merge_%j.out
 #SBATCH --error=/global/scratch/users/%u/rascal-mces-logs/merge_%j.err

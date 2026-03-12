@@ -43,4 +43,4 @@ class Config:
     chunk_size: int = 50_000
 
     # RASCAL MCES
-    timeout_seconds: int = 120
+    timeout_seconds: int = 600

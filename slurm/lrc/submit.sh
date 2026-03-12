@@ -64,19 +64,12 @@ if [ ! -f "$SAMPLE_FILE" ]; then
 fi
 
 # ------------------------------------------------------------------
-# Compute chunk count from sample file using Python helpers
+# Compute chunk count (pure bash — no Python needed)
 # ------------------------------------------------------------------
-read -r N_COMPOUNDS TOTAL_PAIRS TOTAL_CHUNKS CHUNK_SIZE <<< "$(uv run python -c "
-import csv
-from rascal_mces.compute.worker import total_pairs, num_chunks
-from rascal_mces.config import Config
-config = Config()
-with open('$SAMPLE_FILE') as f:
-    n = sum(1 for _ in csv.DictReader(f, delimiter='\t'))
-tp = total_pairs(n)
-nc = num_chunks(n, config.chunk_size)
-print(n, tp, nc, config.chunk_size)
-")"
+CHUNK_SIZE=50000
+N_COMPOUNDS=$(( $(wc -l < "$SAMPLE_FILE") - 1 ))
+TOTAL_PAIRS=$(( N_COMPOUNDS * (N_COMPOUNDS - 1) / 2 ))
+TOTAL_CHUNKS=$(( (TOTAL_PAIRS + CHUNK_SIZE - 1) / CHUNK_SIZE ))
 
 # ------------------------------------------------------------------
 # Debug mode overrides
@@ -124,7 +117,7 @@ fi
 # Cost estimate (lr6: $0.0075/core-hr, 4hr wall time per task)
 # ------------------------------------------------------------------
 REMAINING=$((ARRAY_MAX + 1))
-COST_EST=$(python3 -c "print(f'\${:.0f}'.format($REMAINING * 4 * 0.0075))" 2>/dev/null || echo "N/A")
+COST_EST="\$$(( REMAINING * 4 * 75 / 10000 ))"
 
 # ------------------------------------------------------------------
 # Summary

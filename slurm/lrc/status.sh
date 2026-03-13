@@ -67,6 +67,17 @@ show_status() {
         echo "Progress:       $(( completed * 100 / TOTAL_CHUNKS ))%"
     fi
 
+    # Count workers past 50% from current job logs
+    local job_id
+    job_id=$(squeue -u "$USER" -n rascal-mces -o "%F" -h 2>/dev/null | head -1)
+    if [ -n "$job_id" ] && [ -d "$LOGS_DIR" ]; then
+        local half_done
+        half_done=$(grep -rl "50%" "$LOGS_DIR"/worker_${job_id}_*.out 2>/dev/null | wc -l)
+        local total_out
+        total_out=$(find "$LOGS_DIR" -name "worker_${job_id}_*.out" -type f 2>/dev/null | wc -l)
+        echo "Workers >=50%:  $half_done / $total_out (job $job_id)"
+    fi
+
     # Swap check on a running node
     echo ""
     echo "=== Node Health (first running node) ==="

@@ -49,7 +49,19 @@ show_status() {
         completed=$(find "$RESULT_DIR" -name "chunk_*.parquet" -type f | wc -l)
     fi
 
+    # Count in-progress temp files and zero-byte parquets
+    local in_progress=0
+    local empty=0
+    if [ -d "$RESULT_DIR" ]; then
+        in_progress=$(find "$RESULT_DIR" -name "*.parquet.tmp" -type f 2>/dev/null | wc -l)
+        empty=$(find "$RESULT_DIR" -name "chunk_*.parquet" -empty -type f 2>/dev/null | wc -l)
+    fi
+
     echo "Completed:      $completed / $TOTAL_CHUNKS"
+    echo "In progress:    $in_progress (temp files)"
+    if [ "$empty" -gt 0 ]; then
+        echo "WARNING:        $empty empty parquet files"
+    fi
 
     if [ "$TOTAL_CHUNKS" != "?" ] && [ "$TOTAL_CHUNKS" -gt 0 ]; then
         echo "Progress:       $(( completed * 100 / TOTAL_CHUNKS ))%"

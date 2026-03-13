@@ -9,9 +9,9 @@
 #   --partition=PART       Override partition (default: lr6)
 #   --offset=N             Starting chunk ID offset (default: 0)
 #   --n-chunks=N           Limit number of chunks to submit
-#   --chunks-per-node=N    Chunks processed per node (default: 40)
+#   --chunks-per-node=N    Chunks processed per node (default: 16)
 #   --concurrency=N        Max concurrent array tasks (default: 500)
-#   --debug                Submit 1 node (32 chunks) on lr4 with lr_debug QoS
+#   --debug                Submit 1 node (24 chunks) on lr4 with lr_debug QoS
 #   --dry-run              Show what would be submitted without actually submitting
 
 set -euo pipefail
@@ -28,7 +28,7 @@ PARTITION="lr6"
 QOS="lr_normal"
 OFFSET=0
 N_CHUNKS=""
-CHUNKS_PER_NODE=40
+CHUNKS_PER_NODE=16
 CONCURRENCY=500
 DEBUG=false
 DRY_RUN=false
@@ -54,9 +54,9 @@ if [ -z "$SAMPLE_NAME" ]; then
     echo "  --partition=PART       Partition (default: lr6)"
     echo "  --offset=N             Starting chunk ID offset (default: 0)"
     echo "  --n-chunks=N           Limit number of chunks"
-    echo "  --chunks-per-node=N    Chunks per node (default: 40)"
+    echo "  --chunks-per-node=N    Chunks per node (default: 16)"
     echo "  --concurrency=N        Max concurrent tasks (default: 500)"
-    echo "  --debug                1 node on lr4 with lr_debug QoS"
+    echo "  --debug                1 node (24 chunks) on lr4 with lr_debug QoS"
     echo "  --dry-run              Show submission without executing"
     exit 1
 fi

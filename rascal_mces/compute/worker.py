@@ -93,26 +93,44 @@ def run_worker(
     tmp_path = output_path.with_suffix(".parquet.tmp")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Load compounds (sorted by CID for deterministic triangle ordering)
-    compounds: dict[int, object] = {}
+    # Pass 1: determine valid CIDs (parse SMILES to check, but discard Mol
+    # objects so we don't hold 31K Mol objects per worker in memory)
+    valid_smiles: dict[int, str] = {}
     with open(compound_file) as f:
         reader = csv.DictReader(f, delimiter="\t")
         for row in reader:
             cid = int(row["CID"])
-            mol = MolFromSmiles(row["SMILES"])
-            if mol is not None:
-                compounds[cid] = mol
+            smiles = row["SMILES"]
+            if MolFromSmiles(smiles) is not None:
+                valid_smiles[cid] = smiles
 
-    cids = sorted(compounds.keys())
+    cids = sorted(valid_smiles)
     pairs = pairs_for_chunk(cids, chunk_id, config.chunk_size)
-
-    print(
-        f"Worker chunk {chunk_id}: {len(compounds)} compounds, {len(pairs)} pairs -> {output_path}"
-    )
+    n_valid = len(cids)
+    del cids
 
     if not pairs:
-        print("No pairs for this chunk, skipping.")
+        print(f"Worker chunk {chunk_id}: no pairs for {n_valid} compounds, skipping.")
+        del valid_smiles
         return
+
+    # Pass 2: load only compounds needed for this chunk's pairs
+    needed_cids: set[int] = set()
+    for cid_a, cid_b in pairs:
+        needed_cids.add(cid_a)
+        needed_cids.add(cid_b)
+
+    compounds: dict[int, object] = {}
+    for cid in needed_cids:
+        mol = MolFromSmiles(valid_smiles[cid])
+        if mol is not None:
+            compounds[cid] = mol
+    del valid_smiles, needed_cids
+
+    print(
+        f"Worker chunk {chunk_id}: {len(compounds)} compounds loaded "
+        f"(of {n_valid} valid), {len(pairs)} pairs -> {output_path}"
+    )
 
     opts = RascalOptions()
     opts.similarityThreshold = 0.0  # type: ignore[assignment]

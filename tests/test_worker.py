@@ -126,6 +126,47 @@ def test_worker_logs_halfway_progress_once(monkeypatch, capsys):
         assert f"Worker done: {len(pairs)} pairs" in output
 
 
+def test_worker_reloads_only_needed_compounds(monkeypatch, capsys):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        compound_file = os.path.join(tmpdir, "compounds.tsv")
+        output_file = os.path.join(tmpdir, "output.parquet")
+
+        _make_compound_file(compound_file)
+
+        parse_counts: dict[str, int] = {}
+
+        def fake_mol_from_smiles(smiles: str) -> object:
+            parse_counts[smiles] = parse_counts.get(smiles, 0) + 1
+            return object()
+
+        monkeypatch.setattr(worker_module, "MolFromSmiles", fake_mol_from_smiles)
+        monkeypatch.setattr(
+            worker_module,
+            "pairs_for_chunk",
+            lambda cids, chunk_id, chunk_size: [(1, 2)],
+        )
+        monkeypatch.setattr(
+            worker_module,
+            "FindMCES",
+            lambda mol_a, mol_b, opts: [
+                SimpleNamespace(similarity=0.75, timedOut=False)
+            ],
+        )
+
+        config = Config()
+        config.chunk_size = 1
+        run_worker(config, compound_file, 3, output_file)
+
+        output = capsys.readouterr().out
+
+        assert "2 compounds loaded (of 3 valid), 1 pairs" in output
+        assert parse_counts == {
+            "c1ccccc1": 2,
+            "c1ccc(O)cc1": 2,
+            "CCO": 1,
+        }
+
+
 def test_total_pairs():
     assert total_pairs(3) == 3
     assert total_pairs(10) == 45

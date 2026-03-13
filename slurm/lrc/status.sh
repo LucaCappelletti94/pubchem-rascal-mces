@@ -58,7 +58,12 @@ show_status() {
     fi
 
     echo "Completed:      $completed / $TOTAL_CHUNKS"
-    echo "In progress:    $in_progress (temp files)"
+    local tmp_size="0"
+    if [ "$in_progress" -gt 0 ]; then
+        tmp_size=$(find "$RESULT_DIR" -name "*.parquet.tmp" -type f -printf '%s\n' 2>/dev/null \
+            | awk '{s+=$1} END {printf "%.1f", s/1048576}')
+    fi
+    echo "In progress:    $in_progress (temp files, ${tmp_size}MB written)"
     if [ "$empty" -gt 0 ]; then
         echo "WARNING:        $empty empty parquet files"
     fi

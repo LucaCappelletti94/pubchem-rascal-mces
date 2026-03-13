@@ -67,6 +67,24 @@ show_status() {
         echo "Progress:       $(( completed * 100 / TOTAL_CHUNKS ))%"
     fi
 
+    # Swap check on a running node
+    echo ""
+    echo "=== Node Health (first running node) ==="
+    local node
+    node=$(squeue -u "$USER" -t RUNNING -o "%R" -h 2>/dev/null | head -1)
+    if [ -n "$node" ]; then
+        ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=5 \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            "$node" \
+            'echo "Node: $(hostname)"; free -h | grep -E "Mem|Swap"' 2>/dev/null \
+            || echo "(could not connect to $node)"
+    else
+        echo "(no running nodes)"
+    fi
+
     # SLURM queue status
     echo ""
     echo "=== SLURM Queue ==="

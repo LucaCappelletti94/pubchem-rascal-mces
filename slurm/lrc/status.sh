@@ -58,12 +58,32 @@ show_status() {
     fi
 
     echo "Completed:      $completed / $TOTAL_CHUNKS"
-    local tmp_size="0"
-    if [ "$in_progress" -gt 0 ]; then
-        tmp_size=$(find "$RESULT_DIR" -name "*.parquet.tmp" -type f -printf '%s\n' 2>/dev/null \
-            | awk '{s+=$1} END {printf "%.1f", s/1048576}')
+
+    # Estimate in-progress worker completion using average completed file size
+    local tmp_size_bytes=0
+    local avg_done_bytes=0
+    local tmp_pct="?"
+    if [ "$in_progress" -gt 0 ] && [ -d "$RESULT_DIR" ]; then
+        tmp_size_bytes=$(find "$RESULT_DIR" -name "*.parquet.tmp" -type f -printf '%s\n' 2>/dev/null \
+            | awk '{s+=$1} END {print int(s)}')
+        if [ "$completed" -gt 0 ]; then
+            avg_done_bytes=$(find "$RESULT_DIR" -name "chunk_*.parquet" -type f ! -empty -printf '%s\n' 2>/dev/null \
+                | awk '{s+=$1; n++} END {print int(s/n)}')
+            if [ "$avg_done_bytes" -gt 0 ]; then
+                tmp_pct=$(awk "BEGIN {
+                    pct = 100 * $tmp_size_bytes / ($in_progress * $avg_done_bytes);
+                    if (pct > 100) pct = 100;
+                    printf \"%.0f\", pct
+                }")
+            fi
+        fi
+        local tmp_size_mb
+        tmp_size_mb=$(awk "BEGIN {printf \"%.1f\", $tmp_size_bytes / 1048576}")
+        echo "In progress:    $in_progress (${tmp_size_mb}MB written, ~${tmp_pct}% avg worker completion)"
+    else
+        echo "In progress:    $in_progress"
     fi
-    echo "In progress:    $in_progress (temp files, ${tmp_size}MB written)"
+
     if [ "$empty" -gt 0 ]; then
         echo "WARNING:        $empty empty parquet files"
     fi

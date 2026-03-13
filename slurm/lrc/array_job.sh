@@ -41,6 +41,9 @@ PIDS=()
 for (( CHUNK_ID=BATCH_START; CHUNK_ID<BATCH_END; CHUNK_ID++ )); do
     OUTPUT_FILE="data/results/cluster/${SAMPLE_NAME}/chunk_$(printf '%06d' $CHUNK_ID).parquet"
 
+    # Clean up stale temp files from killed workers
+    rm -f "${OUTPUT_FILE}.tmp"
+
     # Skip if already done
     if [ -f "$OUTPUT_FILE" ]; then
         echo "Chunk $CHUNK_ID already done, skipping."

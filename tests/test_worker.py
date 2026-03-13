@@ -77,6 +77,7 @@ def test_worker_no_timeouts_on_small_molecules():
         table = pq.read_table(output_file)
         timeouts = table.column("timed_out").to_pylist()
         assert all(t == 0 for t in timeouts)
+        assert not os.path.exists(f"{output_file}.tmp")
 
 
 def test_init_worker_sets_rdkit_logger_level(monkeypatch):

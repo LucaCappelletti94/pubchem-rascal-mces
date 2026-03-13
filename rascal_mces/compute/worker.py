@@ -90,6 +90,7 @@ def run_worker(
     _init_worker()
 
     output_path = Path(output_file)
+    tmp_path = output_path.with_suffix(".parquet.tmp")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Load compounds (sorted by CID for deterministic triangle ordering)
@@ -176,7 +177,7 @@ def run_worker(
         if len(cid_a_buf) >= BATCH_SIZE:
             batch = _make_batch(cid_a_buf, cid_b_buf, sim_buf, timeout_buf, time_buf)
             if writer is None:
-                writer = pq.ParquetWriter(str(output_path), SCHEMA, compression="zstd")
+                writer = pq.ParquetWriter(str(tmp_path), SCHEMA, compression="zstd")
             writer.write_table(batch)
             cid_a_buf, cid_b_buf, sim_buf, timeout_buf, time_buf = [], [], [], [], []
 
@@ -184,11 +185,12 @@ def run_worker(
     if cid_a_buf:
         batch = _make_batch(cid_a_buf, cid_b_buf, sim_buf, timeout_buf, time_buf)
         if writer is None:
-            writer = pq.ParquetWriter(str(output_path), SCHEMA, compression="zstd")
+            writer = pq.ParquetWriter(str(tmp_path), SCHEMA, compression="zstd")
         writer.write_table(batch)
 
     if writer is not None:
         writer.close()
+        tmp_path.rename(output_path)
 
     elapsed = time.monotonic() - t_start
     print(

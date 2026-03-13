@@ -20,6 +20,7 @@
 set -euo pipefail
 
 export PATH="$HOME/.local/bin:$PATH"
+export PYTHONUNBUFFERED=1
 
 SAMPLE_NAME="${1:-massspecgym}"
 OFFSET="${2:-0}"

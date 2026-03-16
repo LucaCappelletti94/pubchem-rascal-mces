@@ -192,6 +192,16 @@ Computing the Maximum Common Edge Subgraph is NP-hard. The table below surveys t
 
 RASCAL [\[3\]](#references) is the only method that combines (a) exact MCES computation, (b) native molecular graph semantics (atom types, bond orders, aromaticity), (c) high performance via C++ in RDKit, and (d) production-ready availability as a pip-installable library. Its median per-pair time of ~3 ms makes it practical for hundreds of millions of pairs with timeouts for the heavy tail.
 
+### Key distinctions
+
+**MCIS vs MCES.** MCIS (Maximum Common Induced Subgraph) finds the largest set of shared **atoms** between two molecules, keeping all bonds between them; if two atoms are in the common subgraph and a bond exists between them in the original, it must appear. MCES (Maximum Common Edge Subgraph) finds the largest set of shared **bonds**, which can be matched independently. For chemistry, MCES is generally preferred because bonds carry the structural information most relevant to molecular similarity [\[2\]](#references): two molecules may share many atoms but differ critically in their bonding. McSplit and its variants [\[5\]](#references) solve MCIS, not MCES. McSplit can be adapted to MCES via line-graph transformation (Whitney's theorem), but this is not commonly done in practice.
+
+**myopic-mces** [\[1\]](#references) produces an absolute bond-order-weighted edit distance, a formal metric satisfying the triangle inequality, while RASCAL produces a relative Johnson similarity score from 0 to 1. myopic-mces is used by [MassSpecGym](https://github.com/pluskal-lab/MassSpecGym) [\[4\]](#references) for train/test splitting via agglomerative clustering at threshold T=10. At that threshold, it averages ~536 ms/pair with CPLEX, making it practical for dataset splitting but slower than RASCAL for exhaustive pairwise computation.
+
+**NGA** [\[7\]](#references) is the first neural approach specifically targeting MCES. It approximates solutions in polynomial time via differentiable assignment optimization and outperforms RASCAL on large graphs (>30 atoms) within a 60 s time budget. However, no public code has been released yet, and its approximation quality on exhaustive pairwise computation at scale is unvalidated.
+
+**GPU gap.** No publicly available GPU implementation of exact MCES for molecular graphs exists. GPU work in this space covers subgraph isomorphism, for example [SIGMo](https://github.com/antonio-decaro/SIGMo), general-graph MCIS ([stefanoquer/Maximum-Common-Sugraph](https://github.com/stefanoquer/Maximum-Common-Sugraph)), and fingerprint similarity, for example [FPSim2](https://github.com/chembl/FPSim2), but not exact MCES with chemical semantics. This gap motivates future work on GPU-accelerated MCES for scaling to full PubChem.
+
 ## Development
 
 ```bash

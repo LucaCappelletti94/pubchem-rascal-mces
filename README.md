@@ -183,7 +183,7 @@ Computing the Maximum Common Edge Subgraph is NP-hard. The table below surveys t
 | **myopic-mces** [\[1\]](#references) | ILP via PuLP (Python) | MCES | Exponential (ILP) | Exact (thresholded) | Atom symbol + bond order only | [GitHub](https://github.com/AlBi-HHU/myopic-mces) |
 | **McSplit family** [\[5\]](#references) | Branch-and-bound partitioning (C++) | **MCIS** (not MCES) | Exponential (branch-and-bound) | Exact | Via line-graph transform | [GitHub](https://github.com/jamestrimble/ijcai2017-partitioning-common-subgraph) |
 | **IP formulations** [\[6\]](#references) | Integer programming (Julia) | MCES | Exponential (ILP) | Exact | General graphs | [GitHub](https://github.com/etiennedeg/Maximum-common-edge-subgraph) |
-| **NGA** [\[7\]](#references) | Neural graduated assignment (PyTorch) | MCES | O(n₁²n₂²) per pair (polynomial) | Approximate | Atom/bond labels | No public code yet |
+| **NGA** [\[7\]](#references) | Neural graduated assignment (PyTorch) | MCES | O(n₁²n₂²) per pair (polynomial) | Approximate | Atom/bond labels | [GitHub](https://github.com/LOGO-CUHKSZ/NGA) |
 | **GLSearch** [\[8\]](#references) | DQN-guided branch-and-bound | MCIS | Exponential (anytime) | Exact if completed | Node-labeled graphs | [GitHub](https://github.com/DerekQXu/GLSearch) |
 | **NeuralMCS** | GNN + cross-graph attention | MCIS | O(n₁²n₂²) per pair; O(n²) memory | Approximate | Node-labeled only | [GitHub](https://github.com/openpublicforpapers/NeuralMCS) |
 | **GPU MCS** | — | — | — | — | — | **None available** |
@@ -198,7 +198,7 @@ RASCAL [\[3\]](#references) is the only method that combines (a) exact MCES comp
 
 **myopic-mces** [\[1\]](#references) produces an absolute bond-order-weighted edit distance, a formal metric satisfying the triangle inequality, while RASCAL produces a relative Johnson similarity score from 0 to 1. myopic-mces is used by [MassSpecGym](https://github.com/pluskal-lab/MassSpecGym) [\[4\]](#references) for train/test splitting via agglomerative clustering at threshold T=10. At that threshold, it averages ~536 ms/pair with CPLEX, making it practical for dataset splitting but slower than RASCAL for exhaustive pairwise computation.
 
-**NGA** [\[7\]](#references) is the first neural approach specifically targeting MCES. It approximates solutions in polynomial time via differentiable assignment optimization and outperforms RASCAL on large graphs (>30 atoms) within a 60 s time budget. However, no public code has been released yet, and its approximation quality on exhaustive pairwise computation at scale is unvalidated.
+**NGA** [\[7\]](#references) is the first neural approach specifically targeting MCES. It approximates solutions in polynomial time via differentiable assignment optimization and outperforms RASCAL on large graphs (>30 atoms) within a 60 s time budget. However, its approximation quality on exhaustive pairwise computation at scale is unvalidated (the paper evaluates on 900 sampled pairs).
 
 **GPU gap.** No publicly available GPU implementation of exact MCES for molecular graphs exists. GPU work in this space covers subgraph isomorphism, for example [SIGMo](https://github.com/antonio-decaro/SIGMo), general-graph MCIS ([stefanoquer/Maximum-Common-Sugraph](https://github.com/stefanoquer/Maximum-Common-Sugraph)), and fingerprint similarity, for example [FPSim2](https://github.com/chembl/FPSim2), but not exact MCES with chemical semantics. This gap motivates future work on GPU-accelerated MCES for scaling to full PubChem.
 

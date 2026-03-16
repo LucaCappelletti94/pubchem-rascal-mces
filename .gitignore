@@ -189,7 +189,13 @@ cython_debug/
 # .vscode/
 
 # Data (generated/downloaded — do not commit)
-/data/
+/data/*
+
+# ...but track the analysis plot referenced in the README
+!/data/results/
+/data/results/*
+!/data/results/massspecgym_similarity_analysis.png
+!/data/results/massspecgym_distribution_fit.png
 
 # SLURM logs
 /logs/

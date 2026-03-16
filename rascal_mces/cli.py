@@ -44,8 +44,8 @@ def download(ctx):
 @click.option(
     "--source",
     default=None,
-    type=click.Choice(["massspecgym"]),
-    help="Fetch from a known dataset (e.g. massspecgym)",
+    type=click.Choice(["massspecgym", "pubchemlite"]),
+    help="Fetch from a known dataset (e.g. massspecgym, pubchemlite)",
 )
 @click.pass_context
 def prepare(ctx, limit, cores, from_file, source):

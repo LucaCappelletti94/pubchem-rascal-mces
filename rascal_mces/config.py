@@ -31,6 +31,9 @@ class Config:
         "https://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/CID-SMILES.gz"
     )
 
+    # PubChemLite (Zenodo)
+    pubchemlite_zenodo_record: int = 18849426
+
     # Filtering
     min_heavy_atoms: int = 2
     max_heavy_atoms: int = 100

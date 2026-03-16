@@ -139,19 +139,24 @@ def _read_external_file(path: Path) -> list[tuple[int, str]]:
     return items
 
 
-KNOWN_SOURCES = {
+_HF_SOURCES = {
     "massspecgym": "roman-bushuiev/MassSpecGym",
 }
 
+KNOWN_SOURCES = list(_HF_SOURCES) + ["pubchemlite"]
 
-def _fetch_source(source: str, limit: int | None = None) -> list[tuple[int, str]]:
-    """Fetch unique SMILES from a known HuggingFace dataset."""
+
+def _fetch_source(
+    source: str, *, config: Config, limit: int | None = None
+) -> list[tuple[int, str]]:
+    """Fetch unique SMILES from a known dataset."""
     if source not in KNOWN_SOURCES:
-        raise ValueError(
-            f"Unknown source '{source}'. Known sources: {list(KNOWN_SOURCES.keys())}"
-        )
+        raise ValueError(f"Unknown source '{source}'. Known sources: {KNOWN_SOURCES}")
 
-    hf_id = KNOWN_SOURCES[source]
+    if source == "pubchemlite":
+        return _fetch_pubchemlite(config, limit)
+
+    hf_id = _HF_SOURCES[source]
     print(f"Fetching '{source}' from HuggingFace ({hf_id}) ...")
 
     from datasets import load_dataset
@@ -167,6 +172,54 @@ def _fetch_source(source: str, limit: int | None = None) -> list[tuple[int, str]
 
     print(f"Found {len(smiles_set):,} unique SMILES")
     return list(enumerate(sorted(smiles_set)))
+
+
+def _fetch_pubchemlite(
+    config: Config, limit: int | None = None
+) -> list[tuple[int, str]]:
+    """Download PubChemLite CSV from Zenodo and extract (CID, SMILES) pairs."""
+    import csv
+    import json
+    import urllib.request
+
+    raw_dir = config.raw_dir
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    # Use cached file if available
+    cached = sorted(raw_dir.glob("PubChemLite_*.csv"))
+    if cached:
+        csv_path = cached[-1]
+        print(f"Using cached PubChemLite: {csv_path}")
+    else:
+        record_id = config.pubchemlite_zenodo_record
+        api_url = f"https://zenodo.org/api/records/{record_id}/files"
+        print(f"Fetching file list from Zenodo record {record_id} ...")
+        with urllib.request.urlopen(api_url) as resp:
+            data = json.loads(resp.read())
+        csv_entry = next(e for e in data["entries"] if e["key"].endswith(".csv"))
+        download_url = csv_entry["links"]["content"]
+        filename = csv_entry["key"]
+        csv_path = raw_dir / filename
+        size_mb = csv_entry["size"] / 1e6
+        print(f"Downloading {filename} ({size_mb:.1f} MB) ...")
+        from .download import _download_with_progress
+
+        _download_with_progress(download_url, csv_path)
+
+    print(f"Reading {csv_path} ...")
+    items: list[tuple[int, str]] = []
+    with open(csv_path, newline="") as f:
+        reader = csv.DictReader(f)
+        for row in tqdm(reader, desc="Reading PubChemLite", unit=" compounds"):
+            cid = int(row["Identifier"])
+            smiles = row["SMILES"]
+            if smiles:
+                items.append((cid, smiles))
+            if limit is not None and len(items) >= limit:
+                break
+
+    print(f"Read {len(items):,} compounds from PubChemLite")
+    return items
 
 
 def run_prepare(
@@ -185,7 +238,7 @@ def run_prepare(
     output = config.processed_dir / "pubchem_clean.tsv"
 
     if source is not None:
-        items = _fetch_source(source, limit=limit)
+        items = _fetch_source(source, config=config, limit=limit)
         _run_prepare_items(config, output, items, n_cores)
     elif from_file is not None:
         _run_prepare_external(config, output, Path(from_file), n_cores, limit)
@@ -241,7 +294,10 @@ def _run_prepare_external(
 
 
 def _run_prepare_items(
-    config: Config, output: Path, items: list[tuple[int, str]], n_cores: int
+    config: Config,
+    output: Path,
+    items: list[tuple[int, str]],
+    n_cores: int,
 ) -> None:
     total = len(items)
     print(f"Loaded {total:,} molecules. Normalizing with {n_cores} cores ...")
@@ -277,7 +333,6 @@ def _run_prepare_items(
         sorted(unique_keys.items()), 1
     ):
         renumbered[inchi_key] = (new_id, inchi_key, smiles, hac)
-
     _write_output(output, renumbered, total, norm_fail, filtered_size, duplicates)
 
 

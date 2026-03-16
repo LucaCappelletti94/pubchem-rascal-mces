@@ -42,17 +42,13 @@ def test_merge_combines_chunks():
         run_merge(config, chunk_dir, output_dir)
 
         # Check output
-        output_files = list(sorted(os.listdir(output_dir)))
-        assert "metadata.json" in output_files
-        parquet_files = [f for f in output_files if f.endswith(".parquet")]
-        assert len(parquet_files) >= 1
+        assert os.path.exists(os.path.join(output_dir, "metadata.json"))
+        pairs_file = os.path.join(output_dir, "pairs.parquet")
+        assert os.path.exists(pairs_file)
 
         # Check total rows
-        total = 0
-        for pf in parquet_files:
-            t = pq.read_table(os.path.join(output_dir, pf))
-            total += len(t)
-        assert total == 250
+        t = pq.read_table(pairs_file)
+        assert len(t) == 250
 
         # Check metadata
         with open(os.path.join(output_dir, "metadata.json")) as f:

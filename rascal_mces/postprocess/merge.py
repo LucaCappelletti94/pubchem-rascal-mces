@@ -9,8 +9,6 @@ import rdkit
 
 from ..config import Config
 
-TARGET_FILE_SIZE = 1024 * 1024 * 1024  # 1 GB
-
 
 def run_merge(
     config: Config, result_dir: str, output_dir: str, compound_file: str | None = None
@@ -29,53 +27,21 @@ def run_merge(
     if compound_file is not None:
         _write_compounds_parquet(compound_file, output_path)
 
-    # Estimate rows per output file based on first chunk
-    sample_table = pq.read_table(chunk_files[0])
-    sample_size = chunk_files[0].stat().st_size
-    rows_in_sample = len(sample_table)
-    if sample_size > 0 and rows_in_sample > 0:
-        bytes_per_row = sample_size / rows_in_sample
-        rows_per_file = int(TARGET_FILE_SIZE / bytes_per_row)
-    else:
-        rows_per_file = 50_000_000  # fallback ~50M rows
-
-    print(f"Target: ~{rows_per_file:,} rows per output file (~1 GB)")
-
-    total_rows = 0
-    output_idx = 0
+    out_file = output_path / "pairs.parquet"
     writer = None
-    rows_in_current = 0
+    total_rows = 0
 
     for chunk_file in chunk_files:
         table = pq.read_table(chunk_file)
-        n = len(table)
-        total_rows += n
-
         if writer is None:
-            out_file = output_path / f"pairs_{output_idx:04d}.parquet"
             writer = pq.ParquetWriter(str(out_file), table.schema, compression="zstd")
-
         writer.write_table(table)
-        rows_in_current += n
-
-        if rows_in_current >= rows_per_file:
-            writer.close()
-            out_size = (output_path / f"pairs_{output_idx:04d}.parquet").stat().st_size
-            print(
-                f"  pairs_{output_idx:04d}.parquet: {rows_in_current:,} rows ({out_size / (1024**2):.1f} MB)"
-            )
-            output_idx += 1
-            writer = None
-            rows_in_current = 0
+        total_rows += len(table)
 
     if writer is not None:
         writer.close()
-        out_file = output_path / f"pairs_{output_idx:04d}.parquet"
-        out_size = out_file.stat().st_size
-        print(
-            f"  pairs_{output_idx:04d}.parquet: {rows_in_current:,} rows ({out_size / (1024**2):.1f} MB)"
-        )
-        output_idx += 1
+    out_size = out_file.stat().st_size
+    print(f"  pairs.parquet: {total_rows:,} rows ({out_size / (1024**3):.2f} GB)")
 
     # Write metadata
     metadata = {
@@ -85,15 +51,12 @@ def run_merge(
         "cpu": platform.processor() or "unknown",
         "total_pairs": total_rows,
         "chunk_count": len(chunk_files),
-        "output_files": output_idx,
     }
     meta_path = output_path / "metadata.json"
     with open(meta_path, "w") as f:
         json.dump(metadata, f, indent=2)
 
-    print(
-        f"\nMerged {total_rows:,} total pairs into {output_idx} files in {output_path}"
-    )
+    print(f"\nMerged {total_rows:,} total pairs into {out_file}")
     print(f"Metadata: {meta_path}")
 
 

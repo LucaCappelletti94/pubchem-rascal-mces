@@ -239,7 +239,9 @@ def run_prepare(
 
     if source is not None:
         items = _fetch_source(source, config=config, limit=limit)
-        _run_prepare_items(config, output, items, n_cores)
+        _run_prepare_items(
+            config, output, items, n_cores, preserve_ids=source == "pubchemlite"
+        )
     elif from_file is not None:
         _run_prepare_external(config, output, Path(from_file), n_cores, limit)
     else:
@@ -298,6 +300,8 @@ def _run_prepare_items(
     output: Path,
     items: list[tuple[int, str]],
     n_cores: int,
+    *,
+    preserve_ids: bool = False,
 ) -> None:
     total = len(items)
     print(f"Loaded {total:,} molecules. Normalizing with {n_cores} cores ...")
@@ -324,16 +328,21 @@ def _run_prepare_items(
                 continue
             if inchi_key in unique_keys:
                 duplicates += 1
+                if preserve_ids and idx < unique_keys[inchi_key][0]:
+                    unique_keys[inchi_key] = (idx, inchi_key, smiles, hac)
             else:
                 unique_keys[inchi_key] = (idx, inchi_key, smiles, hac)
 
-    # Re-number IDs sequentially (external files may not have meaningful IDs)
-    renumbered: dict[str, tuple[int, str, str, int]] = {}
-    for new_id, (inchi_key, (_, _, smiles, hac)) in enumerate(
-        sorted(unique_keys.items()), 1
-    ):
-        renumbered[inchi_key] = (new_id, inchi_key, smiles, hac)
-    _write_output(output, renumbered, total, norm_fail, filtered_size, duplicates)
+    if preserve_ids:
+        _write_output(output, unique_keys, total, norm_fail, filtered_size, duplicates)
+    else:
+        # Re-number IDs sequentially (external files may not have meaningful IDs)
+        renumbered: dict[str, tuple[int, str, str, int]] = {}
+        for new_id, (inchi_key, (_, _, smiles, hac)) in enumerate(
+            sorted(unique_keys.items()), 1
+        ):
+            renumbered[inchi_key] = (new_id, inchi_key, smiles, hac)
+        _write_output(output, renumbered, total, norm_fail, filtered_size, duplicates)
 
 
 def _write_output(

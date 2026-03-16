@@ -125,6 +125,55 @@ def test_run_prepare_uses_all_detected_cores_by_default(
     }
 
 
+def test_prepare_preserves_ids():
+    """When preserve_ids=True, original IDs (e.g. PubChem CIDs) are kept."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config = Config(project_root=tmpdir)
+        config.processed_dir.mkdir(parents=True, exist_ok=True)
+        output = config.processed_dir / "pubchem_clean.tsv"
+
+        items = [
+            (100, "c1ccccc1"),  # benzene, CID 100
+            (200, "CCO"),  # ethanol, CID 200
+            (50, "c1ccc(O)cc1"),  # phenol, CID 50
+        ]
+
+        prepare_module._run_prepare_items(config, output, items, 1, preserve_ids=True)
+
+        with open(output) as f:
+            lines = f.readlines()
+
+        assert len(lines) == 4  # header + 3 compounds
+        # Should preserve original CIDs, sorted by CID
+        assert lines[1].startswith("50\t")
+        assert lines[2].startswith("100\t")
+        assert lines[3].startswith("200\t")
+
+
+def test_prepare_preserves_lowest_cid_on_duplicate():
+    """When preserve_ids=True, duplicates keep the lowest CID."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config = Config(project_root=tmpdir)
+        config.processed_dir.mkdir(parents=True, exist_ok=True)
+        output = config.processed_dir / "pubchem_clean.tsv"
+
+        items = [
+            (100, "c1ccccc1"),  # benzene, CID 100
+            (50, "C1=CC=CC=C1"),  # benzene (different notation), CID 50
+            (200, "CCO"),  # ethanol, CID 200
+        ]
+
+        prepare_module._run_prepare_items(config, output, items, 1, preserve_ids=True)
+
+        with open(output) as f:
+            lines = f.readlines()
+
+        assert len(lines) == 3  # header + 2 unique compounds
+        cids = [line.split("\t")[0] for line in lines[1:]]
+        assert "50" in cids  # kept lower CID for benzene
+        assert "100" not in cids  # higher CID was dropped
+
+
 def test_init_worker_sets_rdkit_logger_level(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

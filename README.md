@@ -117,6 +117,30 @@ Per-pair compute time spans 5 orders of magnitude (< 1 ms to 600 s), with median
 
 ![MassSpecGym distribution fitting](data/results/massspecgym_distribution_fit.png)
 
+### PubChemLite (~567k compounds)
+
+Pairwise MCES similarity across [PubChemLite](https://pubchemlite.lcsb.uni.lu/), a curated subset of 567,208 PubChem compounds with annotations from 11 exposomics-relevant categories (drug/medication, toxicity, food-related, etc.). This is an intermediate-scale experiment between MassSpecGym and full PubChem, producing ~161B pairs.
+
+```bash
+# 1. Prepare: download from Zenodo, normalize, deduplicate, filter
+uv run rascal-mces prepare --source pubchemlite
+
+# 2. Sample: use all compounds
+uv run rascal-mces sample --name pubchemlite --all
+
+# 3. Compute (locally for testing, or on SLURM for production)
+uv run rascal-mces run-local --sample-name pubchemlite --cores 8
+
+# 3. (alt) Compute on SLURM
+sbatch slurm/array_job.sh pubchemlite
+
+# 4. Merge and publish
+uv run rascal-mces merge data/results/cluster/pubchemlite data/results/merged/pubchemlite \
+    --compound-file data/samples/pubchemlite.tsv
+```
+
+PubChemLite compounds retain their original PubChem CIDs, enabling direct cross-referencing with PubChem annotations and the future full PubChem run.
+
 ### PubChem (~116M compounds, future)
 
 Pairwise similarity across PubChem at scale. Will require some advances in both algorithm and likely GPU parallelization, as the scale is wholly unmanageable for the current RDKit implementation.

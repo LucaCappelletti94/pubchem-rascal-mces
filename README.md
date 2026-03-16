@@ -173,6 +173,25 @@ sbatch --array=0-49999%200 slurm/array_job.sh pubchem_100k 50000
 
 The second argument is the chunk offset: `CHUNK_ID = SLURM_ARRAY_TASK_ID + OFFSET`. Copy the sample file (`data/samples/*.tsv`) to each cluster. After all clusters finish, collect the chunk parquet files into one directory and run `merge`.
 
+## MCES Landscape
+
+Computing the Maximum Common Edge Subgraph is NP-hard. The table below surveys the main publicly available approaches, their trade-offs, and why this project uses RASCAL.
+
+| Method | Type | Problem | Speed | Exactness | Molecular support | Code |
+|--------|------|---------|-------|-----------|-------------------|------|
+| **RDKit RASCAL** [\[3\]](#references) | Product graph + max clique (C++) | MCES | ~3 ms median per pair | Exact (with timeout) | Full (atom/bond types, aromaticity) | [RDKit](https://www.rdkit.org/docs/source/rdkit.Chem.rdRascalMCES.html) |
+| **myopic-mces** [\[1\]](#references) | ILP via PuLP (Python) | MCES | ~536 ms/pair at T=10 [\[1\]](#references) | Exact (thresholded) | Atom symbol + bond order only | [GitHub](https://github.com/AlBi-HHU/myopic-mces) |
+| **McSplit family** [\[5\]](#references) | Branch-and-bound partitioning (C++) | **MCIS** (not MCES) | State-of-the-art for MCIS | Exact | Via line-graph transform | [GitHub](https://github.com/jamestrimble/ijcai2017-partitioning-common-subgraph) |
+| **IP formulations** [\[6\]](#references) | Integer programming (Julia) | MCES | Depends on solver/instance | Exact | General graphs | [GitHub](https://github.com/etiennedeg/Maximum-common-edge-subgraph) |
+| **NGA** [\[7\]](#references) | Neural graduated assignment (PyTorch) | MCES | Polynomial time | Approximate | Atom/bond labels | No public code yet |
+| **GLSearch** [\[8\]](#references) | DQN-guided branch-and-bound | MCS | Anytime | Exact if completed | Node-labeled graphs | [GitHub](https://github.com/DerekQXu/GLSearch) |
+| **NeuralMCS** | GNN + cross-graph attention | MCS | ~32x faster than McSplit | Approximate | Node-labeled only | [GitHub](https://github.com/openpublicforpapers/NeuralMCS) |
+| **GPU MCS** | — | — | — | — | — | **None available** |
+
+### Why RASCAL
+
+RASCAL [\[3\]](#references) is the only method that combines (a) exact MCES computation, (b) native molecular graph semantics (atom types, bond orders, aromaticity), (c) high performance via C++ in RDKit, and (d) production-ready availability as a pip-installable library. Its median per-pair time of ~3 ms makes it practical for hundreds of millions of pairs with timeouts for the heavy tail.
+
 ## Development
 
 ```bash
@@ -188,3 +207,7 @@ uv run mypy rascal_mces/
 2. Raymond, J. W. & Willett, P. Maximum common subgraph isomorphism algorithms for the matching of chemical structures. *J. Comput.-Aided Mol. Des.* **16**, 521–533 (2002). [doi:10.1023/A:1021271615909](https://doi.org/10.1023/A:1021271615909)
 3. Raymond, J. W., Gardiner, E. J. & Willett, P. RASCAL: Calculation of graph similarity using maximum common edge subgraphs. *Comput. J.* **45**, 631–644 (2002). [doi:10.1093/comjnl/45.6.631](https://doi.org/10.1093/comjnl/45.6.631)
 4. Bushuiev, R. *et al.* MassSpecGym: A benchmark for the discovery and identification of molecules. *Advances in Neural Information Processing Systems* **37** (NeurIPS 2024). [arXiv:2410.23326](https://arxiv.org/abs/2410.23326)
+5. McCreesh, C., Prosser, P. & Trimble, J. A partitioning algorithm for maximum common subgraph problems. *Proc. IJCAI* 712–719 (2017). [doi:10.24963/ijcai.2017/99](https://doi.org/10.24963/ijcai.2017/99)
+6. de Gastines, E. & Knippel, A. Formulations for the maximum common edge subgraph problem. *Discrete Appl. Math.* **346**, 115–130 (2024). [doi:10.1016/j.dam.2023.11.044](https://doi.org/10.1016/j.dam.2023.11.044)
+7. Ying, C., Ruan, Y., Chen, X., Wang, Y. & Yu, T. Neural graduated assignment for maximum common edge subgraphs. [arXiv:2505.12325](https://arxiv.org/abs/2505.12325) (2025).
+8. Bai, Y., Xu, D., Sun, Y. & Wang, W. GLSearch: Maximum common subgraph detection via learning to search. *Proc. ICML* 588–598 (2021). [Paper](https://proceedings.mlr.press/v139/bai21b.html)
